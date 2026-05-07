@@ -1,0 +1,29 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+
+# PyCharm
+.idea/
+
+# Logs
+logs/*.log
+
+# Database
+data/*.db
+
+# Build
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
