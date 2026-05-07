@@ -1,0 +1,18 @@
+{
+    "app_name": "Industrial OCR System",
+    "app_version": "0.1.0",
+    "logging": {
+        "level": "INFO",
+        "filename": "application.log",
+        "max_file_size_mb": 10,
+        "backup_count": 5
+    },
+    "database": {
+        "filename": "app.db"
+    },
+    "ui": {
+        "theme": "dark",
+        "window_width": 1600,
+        "window_height": 900
+    }
+}
