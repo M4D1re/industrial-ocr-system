@@ -5,6 +5,7 @@ from app.ui.windows.main_window import MainWindow
 from app.utils.logger import setup_logger
 from app.utils.paths import ensure_directories
 
+from app.database.database_manager import DatabaseManager
 
 class Bootstrap:
     """
@@ -15,6 +16,10 @@ class Bootstrap:
         ensure_directories()
 
         self.logger = setup_logger()
+
+        self.database = DatabaseManager()
+        self.database.initialize()
+        self.logger.info("Database initialized")
 
         self.config_manager = ConfigManager()
 
