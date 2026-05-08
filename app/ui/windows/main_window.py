@@ -7,6 +7,9 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from app.services.camera_manager import CameraManager
+from app.vision.frame_converter import FrameConverter
+
 from app.ui.widgets.analytics_panel import AnalyticsPanel
 from app.ui.widgets.camera_panel import CameraPanel
 from app.ui.widgets.logs_panel import LogsPanel
@@ -26,7 +29,11 @@ class MainWindow(QMainWindow):
 
         self.resize(1600, 900)
 
+        self.camera_manager = CameraManager()
+
         self._setup_ui()
+
+        self._initialize_test_camera()
 
     def _setup_ui(self) -> None:
         """
@@ -133,3 +140,60 @@ class MainWindow(QMainWindow):
         dock.setWidget(StatusPanel())
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
+
+    def _initialize_test_camera(self) -> None:
+        """
+        Initializes default test camera.
+
+        Source '0' means the default webcam connected to the computer.
+        """
+
+        camera = self.camera_manager.add_camera("0")
+
+        camera.frame_ready.connect(self._on_frame_ready)
+
+        camera.connection_changed.connect(
+            self._on_camera_connection_changed
+        )
+
+        camera.fps_updated.connect(self._on_fps_updated)
+
+    def _on_frame_ready(self, frame) -> None:
+        """
+        Receives camera frame from background camera thread.
+        """
+
+        image = FrameConverter.convert_cv_to_qt(frame)
+
+        self.video_widget.update_frame(image)
+
+    def _on_camera_connection_changed(
+            self,
+            connected: bool,
+    ) -> None:
+        """
+        Updates UI when camera connection status changes.
+        """
+
+        if connected:
+            self.statusBar().showMessage("Camera connected")
+        else:
+            self.statusBar().showMessage("Camera disconnected")
+
+    def _on_fps_updated(self, fps: float) -> None:
+        """
+        Updates bottom status bar with current FPS.
+        """
+
+        self.statusBar().showMessage(
+            f"Live Stream | FPS: {fps:.2f}"
+        )
+
+    def closeEvent(self, event) -> None:
+        """
+        Stops camera threads before application closes.
+        """
+
+        self.camera_manager.stop_all()
+
+        event.accept()
