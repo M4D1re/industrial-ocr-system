@@ -1,8 +1,14 @@
+from pathlib import Path
+
+from PySide6.QtWidgets import QMessageBox
+
+from app.ocr.ocr_pipeline import OCRPipeline
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDockWidget,
-    QLabel,
     QMainWindow,
+    QMessageBox,
     QStatusBar,
     QToolBar,
 )
@@ -36,6 +42,8 @@ class MainWindow(QMainWindow):
         self.camera_repository = CameraRepository(self.database)
 
         self.roi_repository = ROIRepository(self.database)
+
+        self.ocr_pipeline = OCRPipeline()
 
         self.default_camera = (
             self.camera_repository.get_or_create_default_camera()
@@ -74,6 +82,12 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
 
         toolbar.setMovable(False)
+
+        process_roi_action = toolbar.addAction("Process ROI")
+
+        process_roi_action.triggered.connect(
+            self._process_selected_roi
+        )
 
         self.addToolBar(toolbar)
 
@@ -233,6 +247,8 @@ class MainWindow(QMainWindow):
         Receives camera frame from background camera thread.
         """
 
+        self.video_widget.update_cv_frame(frame)
+
         image = FrameConverter.convert_cv_to_qt(frame)
 
         self.video_widget.update_frame(image)
@@ -289,6 +305,59 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(
             f"ROI deleted: {roi_id}"
+        )
+
+    def _process_selected_roi(self) -> None:
+        """
+        Processes first ROI and saves debug image.
+        """
+
+        if self.video_widget.last_cv_frame is None:
+            QMessageBox.warning(
+                self,
+                "No frame",
+                "Кадр с камеры еще не получен.",
+            )
+            return
+
+        if not self.video_widget.roi_regions:
+            QMessageBox.warning(
+                self,
+                "No ROI",
+                "Сначала выдели хотя бы одну ROI-область.",
+            )
+            return
+
+        roi = self.video_widget.roi_regions[0]
+
+        try:
+            processed = self.ocr_pipeline.process_roi(
+                self.video_widget.last_cv_frame,
+                roi,
+            )
+        except ValueError as error:
+            QMessageBox.critical(
+                self,
+                "OCR preprocessing error",
+                str(error),
+            )
+            return
+
+        debug_dir = Path("data/debug")
+
+        debug_dir.mkdir(parents=True, exist_ok=True)
+
+        debug_path = debug_dir / f"roi_{roi.id}_processed.png"
+
+        self.ocr_pipeline.save_debug_image(
+            processed,
+            str(debug_path),
+        )
+
+        QMessageBox.information(
+            self,
+            "ROI processed",
+            f"Обработанное изображение сохранено:\n{debug_path}",
         )
 
     def closeEvent(self, event) -> None:

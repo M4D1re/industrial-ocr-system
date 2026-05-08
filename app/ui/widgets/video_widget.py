@@ -1,8 +1,13 @@
+import numpy as np
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QImage, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from app.models.roi_model import ROIModel
+
+from PySide6.QtCore import QPoint, QRect, Qt, Signal
+
+
 
 
 
@@ -20,6 +25,7 @@ class VideoWidget(QWidget):
         super().__init__()
 
         self.current_frame: QImage | None = None
+        self.last_cv_frame: np.ndarray | None = None
 
         self.roi_regions: list[ROIModel] = []
 
@@ -30,6 +36,13 @@ class VideoWidget(QWidget):
         self.current_rect: QRect | None = None
 
         self.setMinimumSize(800, 600)
+
+    def update_cv_frame(self, frame: np.ndarray) -> None:
+        """
+        Stores latest OpenCV frame for OCR processing.
+        """
+
+        self.last_cv_frame = frame.copy()
 
     def update_frame(self, image: QImage) -> None:
         """
@@ -133,13 +146,20 @@ class VideoWidget(QWidget):
 
         roi_id = len(self.roi_regions) + 1
 
+        frame_rect = self._widget_rect_to_frame_rect(self.current_rect)
+
+        if frame_rect is None:
+            self.current_rect = None
+            self.update()
+            return
+
         roi = ROIModel(
             id=roi_id,
             name=f"ROI {roi_id}",
-            x=self.current_rect.x(),
-            y=self.current_rect.y(),
-            width=self.current_rect.width(),
-            height=self.current_rect.height(),
+            x=frame_rect.x(),
+            y=frame_rect.y(),
+            width=frame_rect.width(),
+            height=frame_rect.height(),
         )
 
         self.roi_regions.append(roi)
@@ -160,12 +180,17 @@ class VideoWidget(QWidget):
         painter.setPen(pen)
 
         for roi in self.roi_regions:
-            rect = QRect(
-                roi.x,
-                roi.y,
-                roi.width,
-                roi.height,
+            rect = self._frame_rect_to_widget_rect(
+                QRect(
+                    roi.x,
+                    roi.y,
+                    roi.width,
+                    roi.height,
+                )
             )
+
+            if rect is None:
+                continue
 
             painter.drawRect(rect)
 
@@ -195,3 +220,73 @@ class VideoWidget(QWidget):
         self.roi_regions = roi_regions
 
         self.update()
+
+    def _get_video_display_rect(self) -> QRect | None:
+        """
+        Returns actual video rectangle inside widget.
+        """
+
+        if self.current_frame is None:
+            return None
+
+        scaled = self.current_frame.scaled(
+            self.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        x = (self.width() - scaled.width()) // 2
+        y = (self.height() - scaled.height()) // 2
+
+        return QRect(x, y, scaled.width(), scaled.height())
+
+    def _widget_rect_to_frame_rect(self, rect: QRect) -> QRect | None:
+        """
+        Converts widget coordinates to original camera frame coordinates.
+        """
+
+        if self.current_frame is None:
+            return None
+
+        video_rect = self._get_video_display_rect()
+
+        if video_rect is None:
+            return None
+
+        intersected = rect.intersected(video_rect)
+
+        if intersected.isEmpty():
+            return None
+
+        scale_x = self.current_frame.width() / video_rect.width()
+        scale_y = self.current_frame.height() / video_rect.height()
+
+        x = int((intersected.x() - video_rect.x()) * scale_x)
+        y = int((intersected.y() - video_rect.y()) * scale_y)
+        width = int(intersected.width() * scale_x)
+        height = int(intersected.height() * scale_y)
+
+        return QRect(x, y, width, height)
+
+    def _frame_rect_to_widget_rect(self, rect: QRect) -> QRect | None:
+        """
+        Converts original camera frame coordinates to widget coordinates.
+        """
+
+        if self.current_frame is None:
+            return None
+
+        video_rect = self._get_video_display_rect()
+
+        if video_rect is None:
+            return None
+
+        scale_x = video_rect.width() / self.current_frame.width()
+        scale_y = video_rect.height() / self.current_frame.height()
+
+        x = int(video_rect.x() + rect.x() * scale_x)
+        y = int(video_rect.y() + rect.y() * scale_y)
+        width = int(rect.width() * scale_x)
+        height = int(rect.height() * scale_y)
+
+        return QRect(x, y, width, height)
