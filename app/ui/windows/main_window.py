@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from app.ui.widgets.roi_panel import ROIPanel
+
 from app.services.camera_manager import CameraManager
 from app.vision.frame_converter import FrameConverter
 
@@ -77,7 +79,17 @@ class MainWindow(QMainWindow):
 
         self.video_widget = VideoWidget()
 
+        self.video_widget.roi_created.connect(
+            self._on_roi_created
+        )
+
+        self.video_widget.roi_deleted.connect(
+            self._on_roi_deleted
+        )
+
         self.setCentralWidget(self.video_widget)
+
+
 
     def _create_docks(self) -> None:
         """
@@ -85,6 +97,8 @@ class MainWindow(QMainWindow):
         """
 
         self._create_camera_dock()
+
+        self._create_roi_dock()
 
         self._create_logs_dock()
 
@@ -105,6 +119,28 @@ class MainWindow(QMainWindow):
         )
 
         dock.setWidget(CameraPanel())
+
+        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+
+    def _create_roi_dock(self) -> None:
+        """
+        Creates ROI dock.
+        """
+
+        dock = QDockWidget("ROI Regions", self)
+
+        dock.setAllowedAreas(
+            Qt.LeftDockWidgetArea |
+            Qt.RightDockWidgetArea
+        )
+
+        self.roi_panel = ROIPanel()
+
+        self.roi_panel.delete_requested.connect(
+            self.video_widget.delete_roi
+        )
+
+        dock.setWidget(self.roi_panel)
 
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
@@ -187,6 +223,28 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(
             f"Live Stream | FPS: {fps:.2f}"
+        )
+
+    def _on_roi_created(self, roi) -> None:
+        """
+        Handles new ROI creation.
+        """
+
+        self.roi_panel.add_roi(roi)
+
+        self.statusBar().showMessage(
+            f"ROI created: {roi.name}"
+        )
+
+    def _on_roi_deleted(self, roi_id: int) -> None:
+        """
+        Handles ROI deletion.
+        """
+
+        self.roi_panel.remove_roi(roi_id)
+
+        self.statusBar().showMessage(
+            f"ROI deleted: {roi_id}"
         )
 
     def closeEvent(self, event) -> None:

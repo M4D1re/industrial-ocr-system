@@ -1,14 +1,18 @@
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QImage, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from app.models.roi_model import ROIModel
 
 
+
 class VideoWidget(QWidget):
     """
     Live video display widget with ROI overlay editor.
     """
+
+    roi_created = Signal(object)
+    roi_deleted = Signal(object)
 
     MAX_ROI_COUNT = 10
 
@@ -140,6 +144,8 @@ class VideoWidget(QWidget):
 
         self.roi_regions.append(roi)
 
+        self.roi_created.emit(roi)
+
         self.current_rect = None
 
         self.update()
@@ -167,3 +173,16 @@ class VideoWidget(QWidget):
                 rect.topLeft() + QPoint(4, -4),
                 roi.name,
             )
+
+    def delete_roi(self, roi_id: int) -> None:
+        """
+        Deletes ROI by id.
+        """
+
+        self.roi_regions = [
+            roi for roi in self.roi_regions if roi.id != roi_id
+        ]
+
+        self.roi_deleted.emit(roi_id)
+
+        self.update()
