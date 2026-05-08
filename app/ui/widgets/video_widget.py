@@ -186,3 +186,12 @@ class VideoWidget(QWidget):
         self.roi_deleted.emit(roi_id)
 
         self.update()
+
+    def set_roi_regions(self, roi_regions: list[ROIModel]) -> None:
+        """
+        Loads ROI regions into video widget.
+        """
+
+        self.roi_regions = roi_regions
+
+        self.update()

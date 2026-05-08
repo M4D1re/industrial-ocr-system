@@ -21,6 +21,7 @@ class Bootstrap:
         self.database.initialize()
         self.logger.info("Database initialized")
 
+
         self.config_manager = ConfigManager()
 
         self.config = self.config_manager.load()
@@ -31,7 +32,7 @@ class Bootstrap:
 
         self.app.setStyleSheet(DARK_THEME)
 
-        self.main_window = MainWindow()
+        self.main_window = MainWindow(self.database)
 
     def run(self) -> int:
         """

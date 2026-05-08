@@ -7,6 +7,10 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from app.database.camera_repository import CameraRepository
+from app.database.database_manager import DatabaseManager
+from app.database.roi_repository import ROIRepository
+
 from app.ui.widgets.roi_panel import ROIPanel
 
 from app.services.camera_manager import CameraManager
@@ -24,8 +28,18 @@ class MainWindow(QMainWindow):
     Main application window.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, database: DatabaseManager) -> None:
         super().__init__()
+
+        self.database = database
+
+        self.camera_repository = CameraRepository(self.database)
+
+        self.roi_repository = ROIRepository(self.database)
+
+        self.default_camera = (
+            self.camera_repository.get_or_create_default_camera()
+        )
 
         self.setWindowTitle("Industrial OCR System")
 
@@ -34,6 +48,8 @@ class MainWindow(QMainWindow):
         self.camera_manager = CameraManager()
 
         self._setup_ui()
+
+        self._load_saved_roi_regions()
 
         self._initialize_test_camera()
 
@@ -177,14 +193,32 @@ class MainWindow(QMainWindow):
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
 
+    def _load_saved_roi_regions(self) -> None:
+        """
+        Loads saved ROI regions from database.
+        """
+
+        roi_regions = self.roi_repository.list_by_camera(
+            self.default_camera.id
+        )
+
+        self.video_widget.set_roi_regions(roi_regions)
+
+        for roi in roi_regions:
+            self.roi_panel.add_roi(roi)
+
+        self.statusBar().showMessage(
+            f"Loaded ROI regions: {len(roi_regions)}"
+        )
+
     def _initialize_test_camera(self) -> None:
         """
         Initializes default test camera.
-
-        Source '0' means the default webcam connected to the computer.
         """
 
-        camera = self.camera_manager.add_camera("0")
+        camera = self.camera_manager.add_camera(
+            self.default_camera.source
+        )
 
         camera.frame_ready.connect(self._on_frame_ready)
 
@@ -227,19 +261,29 @@ class MainWindow(QMainWindow):
 
     def _on_roi_created(self, roi) -> None:
         """
-        Handles new ROI creation.
+        Handles new ROI creation and saves it to database.
         """
+
+        database_roi_id = self.roi_repository.create(
+            self.default_camera.id,
+            roi,
+        )
+
+        roi.id = database_roi_id
+        roi.name = f"ROI {database_roi_id}"
 
         self.roi_panel.add_roi(roi)
 
         self.statusBar().showMessage(
-            f"ROI created: {roi.name}"
+            f"ROI saved: {roi.name}"
         )
 
     def _on_roi_deleted(self, roi_id: int) -> None:
         """
-        Handles ROI deletion.
+        Handles ROI deletion and removes it from database.
         """
+
+        self.roi_repository.delete(roi_id)
 
         self.roi_panel.remove_roi(roi_id)
 
