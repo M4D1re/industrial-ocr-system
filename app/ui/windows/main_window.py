@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from app.database.reading_repository import ReadingRepository
 
+from app.ui.widgets.readings_panel import ReadingsPanel
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -123,8 +124,6 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.video_widget)
 
-
-
     def _create_docks(self) -> None:
         """
         Creates docking panels.
@@ -133,6 +132,8 @@ class MainWindow(QMainWindow):
         self._create_camera_dock()
 
         self._create_roi_dock()
+
+        self._create_readings_dock()
 
         self._create_logs_dock()
 
@@ -177,6 +178,25 @@ class MainWindow(QMainWindow):
         dock.setWidget(self.roi_panel)
 
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+
+    def _create_readings_dock(self) -> None:
+        """
+        Creates current readings dock.
+        """
+
+        dock = QDockWidget("Current Readings", self)
+
+        dock.setAllowedAreas(
+            Qt.LeftDockWidgetArea |
+            Qt.RightDockWidgetArea |
+            Qt.BottomDockWidgetArea
+        )
+
+        self.readings_panel = ReadingsPanel()
+
+        dock.setWidget(self.readings_panel)
+
+        self.addDockWidget(Qt.RightDockWidgetArea, dock)
 
     def _create_logs_dock(self) -> None:
         """
@@ -389,6 +409,14 @@ class MainWindow(QMainWindow):
 
         reading_id = self.reading_repository.create(
             roi_id=roi.id,
+            value=numeric_value,
+            raw_text=raw_text,
+            confidence=confidence,
+        )
+
+        self.readings_panel.update_reading(
+            reading_id=reading_id,
+            roi_name=roi.name,
             value=numeric_value,
             raw_text=raw_text,
             confidence=confidence,
