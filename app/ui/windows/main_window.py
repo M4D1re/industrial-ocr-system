@@ -2,6 +2,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QMessageBox
 
+from app.database.reading_repository import ReadingRepository
+
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -44,6 +46,7 @@ class MainWindow(QMainWindow):
 
         self.roi_repository = ROIRepository(self.database)
 
+        self.reading_repository = ReadingRepository(self.database)
 
         self.ocr_worker: OCRWorker | None = None
 
@@ -384,10 +387,18 @@ class MainWindow(QMainWindow):
             f"OCR completed for {roi.name}"
         )
 
+        reading_id = self.reading_repository.create(
+            roi_id=roi.id,
+            value=numeric_value,
+            raw_text=raw_text,
+            confidence=confidence,
+        )
+
         QMessageBox.information(
             self,
             "OCR result",
             (
+                f"Reading ID: {reading_id}\n"
                 f"ROI: {roi.name}\n"
                 f"Raw text: {raw_text}\n"
                 f"Confidence: {confidence:.2f}\n"
