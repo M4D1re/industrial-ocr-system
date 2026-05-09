@@ -1,5 +1,8 @@
 from pathlib import Path
 
+from app.database.session_repository import SessionRepository
+from app.services.database_cleanup_service import DatabaseCleanupService
+
 from PySide6.QtWidgets import QMessageBox
 
 from app.database.reading_repository import ReadingRepository
@@ -59,6 +62,12 @@ class MainWindow(QMainWindow):
         self.roi_repository = ROIRepository(self.database)
 
         self.reading_repository = ReadingRepository(self.database)
+
+        self.session_repository = SessionRepository(self.database)
+
+        self.database_cleanup_service = DatabaseCleanupService(self.database)
+
+        self.current_session_id: int | None = None
 
         self.ocr_worker: MultiCameraOCRWorker | None = None
 
@@ -124,6 +133,18 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
+        start_session_action = toolbar.addAction("Start Session")
+        start_session_action.triggered.connect(
+            self._start_session
+        )
+
+        stop_session_action = toolbar.addAction("Stop Session")
+        stop_session_action.triggered.connect(
+            self._stop_session
+        )
+
+        toolbar.addSeparator()
+
         toolbar.addWidget(QLabel("Hours:"))
 
         self.polling_hours_spinbox = QSpinBox()
@@ -155,6 +176,16 @@ class MainWindow(QMainWindow):
         stop_auto_ocr_action = toolbar.addAction("Stop Auto OCR")
         stop_auto_ocr_action.triggered.connect(
             self._stop_auto_ocr
+        )
+
+        clear_session_data_action = toolbar.addAction("Clear Session Data")
+        clear_session_data_action.triggered.connect(
+            self._clear_session_data
+        )
+
+        factory_reset_action = toolbar.addAction("Factory Reset DB")
+        factory_reset_action.triggered.connect(
+            self._factory_reset_database
         )
 
         self.addToolBar(toolbar)
@@ -550,10 +581,66 @@ class MainWindow(QMainWindow):
             f"ROI deleted: {roi_id}"
         )
 
+    def _start_session(self) -> None:
+        """
+        Starts recording session.
+        """
+
+        if self.current_session_id is not None:
+            QMessageBox.information(
+                self,
+                "Session already active",
+                "Сессия уже запущена.",
+            )
+            return
+
+        session_name = "Recording Session"
+
+        self.current_session_id = self.session_repository.create(
+            session_name
+        )
+
+        self.statusBar().showMessage(
+            f"Session started: {self.current_session_id}"
+        )
+
+    def _stop_session(self) -> None:
+        """
+        Stops recording session.
+        """
+
+        if self.current_session_id is None:
+            QMessageBox.information(
+                self,
+                "No active session",
+                "Нет активной сессии.",
+            )
+            return
+
+        self.session_repository.finish(self.current_session_id)
+
+        finished_session_id = self.current_session_id
+
+        self.current_session_id = None
+
+        self._stop_auto_ocr()
+
+        self.statusBar().showMessage(
+            f"Session stopped: {finished_session_id}"
+        )
+
     def _start_auto_ocr(self) -> None:
         """
         Starts automatic OCR polling.
         """
+
+        if self.current_session_id is None:
+            QMessageBox.warning(
+                self,
+                "No active session",
+                "Сначала запусти сессию: Start Session.",
+            )
+            return
 
         if not self.video_widget.roi_regions:
             QMessageBox.warning(
@@ -766,6 +853,7 @@ class MainWindow(QMainWindow):
         )
 
         reading_id = self.reading_repository.create(
+            session_id=self.current_session_id,
             roi_id=roi.id,
             value=numeric_value,
             raw_text=raw_text,
@@ -799,6 +887,87 @@ class MainWindow(QMainWindow):
         """
 
         self.statusBar().showMessage("OCR worker finished")
+
+    def _clear_session_data(self) -> None:
+        """
+        Clears session data but keeps cameras and ROI.
+        """
+
+        if self.current_session_id is not None:
+            QMessageBox.warning(
+                self,
+                "Session active",
+                "Нельзя очищать данные во время активной сессии.",
+            )
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Clear Session Data",
+            (
+                "Удалить все sessions, readings и events?\n\n"
+                "Камеры и ROI останутся."
+            ),
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        self.database_cleanup_service.clear_session_data()
+
+        self.statusBar().showMessage(
+            "Session data cleared"
+        )
+
+    def _factory_reset_database(self) -> None:
+        """
+        Fully clears database.
+        """
+
+        if self.current_session_id is not None:
+            QMessageBox.warning(
+                self,
+                "Session active",
+                "Нельзя делать полный сброс во время активной сессии.",
+            )
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Factory Reset DB",
+            (
+                "Полностью очистить БД?\n\n"
+                "Будут удалены камеры, ROI, sessions, readings и events."
+            ),
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        self._stop_auto_ocr()
+
+        self.camera_manager.stop_all()
+
+        self.database_cleanup_service.factory_reset()
+
+        self._discover_usb_cameras()
+        self._load_saved_cameras()
+
+        self.default_camera = (
+            self.camera_repository.get_or_create_default_camera()
+        )
+
+        self.active_display_camera = self.default_camera
+
+        self._load_saved_roi_regions()
+
+        self.camera_manager.start_cameras(
+            self.camera_repository.list_all()
+        )
+
+        self.statusBar().showMessage(
+            "Database factory reset completed"
+        )
 
     def closeEvent(self, event) -> None:
         """

@@ -22,16 +22,26 @@ CREATE TABLE IF NOT EXISTS roi_regions (
     FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    comment TEXT
+);
+
 CREATE TABLE IF NOT EXISTS readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER,
     roi_id INTEGER NOT NULL,
     value REAL,
     raw_text TEXT,
     confidence REAL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL,
     FOREIGN KEY (roi_id) REFERENCES roi_regions(id) ON DELETE CASCADE
 );
-
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     level TEXT NOT NULL,
@@ -51,6 +61,9 @@ ON roi_regions(camera_id);
 
 CREATE INDEX IF NOT EXISTS idx_readings_roi_id_created_at
 ON readings(roi_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_readings_session_id
+ON readings(session_id);
 
 CREATE INDEX IF NOT EXISTS idx_events_created_at
 ON events(created_at);

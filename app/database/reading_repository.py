@@ -10,30 +10,31 @@ class ReadingRepository:
         self.database = database
 
     def create(
-        self,
-        roi_id: int,
-        value: float | None,
-        raw_text: str,
-        confidence: float,
+            self,
+            session_id: int | None,
+            roi_id: int,
+            value: float | None,
+            raw_text: str,
+            confidence: float,
     ) -> int:
         """
         Saves OCR reading to database.
         """
 
         query = """
-        INSERT INTO readings (
-            roi_id,
-            value,
-            raw_text,
-            confidence
-        )
-        VALUES (?, ?, ?, ?)
-        """
+                INSERT INTO readings (session_id, \
+                                      roi_id, \
+                                      value, \
+                                      raw_text, \
+                                      confidence)
+                VALUES (?, ?, ?, ?, ?) \
+                """
 
         with self.database.connect() as connection:
             cursor = connection.execute(
                 query,
                 (
+                    session_id,
                     roi_id,
                     value,
                     raw_text,
@@ -44,7 +45,6 @@ class ReadingRepository:
             connection.commit()
 
             return int(cursor.lastrowid)
-
     def list_by_roi(self, roi_id: int) -> list[dict]:
         """
         Loads readings by ROI id.
