@@ -6,7 +6,7 @@ from app.database.reading_repository import ReadingRepository
 
 from app.ui.widgets.readings_panel import ReadingsPanel
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QDockWidget,
     QMainWindow,
@@ -51,6 +51,12 @@ class MainWindow(QMainWindow):
 
         self.ocr_worker: OCRWorker | None = None
 
+        self.auto_ocr_timer = QTimer(self)
+
+        self.auto_ocr_timer.timeout.connect(
+            self._process_selected_roi
+        )
+
         self.default_camera = (
             self.camera_repository.get_or_create_default_camera()
         )
@@ -89,9 +95,18 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
 
         process_roi_action = toolbar.addAction("Process ROI")
-
         process_roi_action.triggered.connect(
             self._process_selected_roi
+        )
+
+        start_auto_ocr_action = toolbar.addAction("Start Auto OCR")
+        start_auto_ocr_action.triggered.connect(
+            self._start_auto_ocr
+        )
+
+        stop_auto_ocr_action = toolbar.addAction("Stop Auto OCR")
+        stop_auto_ocr_action.triggered.connect(
+            self._stop_auto_ocr
         )
 
         self.addToolBar(toolbar)
@@ -331,6 +346,36 @@ class MainWindow(QMainWindow):
             f"ROI deleted: {roi_id}"
         )
 
+    def _start_auto_ocr(self) -> None:
+        """
+        Starts automatic OCR polling.
+        """
+
+        if not self.video_widget.roi_regions:
+            QMessageBox.warning(
+                self,
+                "No ROI",
+                "Сначала выдели хотя бы одну ROI-область.",
+            )
+            return
+
+        interval_ms = self.video_widget.roi_regions[0].polling_interval_sec * 1000
+
+        self.auto_ocr_timer.start(interval_ms)
+
+        self.statusBar().showMessage(
+            f"Auto OCR started. Interval: {interval_ms // 1000} sec"
+        )
+
+    def _stop_auto_ocr(self) -> None:
+        """
+        Stops automatic OCR polling.
+        """
+
+        self.auto_ocr_timer.stop()
+
+        self.statusBar().showMessage("Auto OCR stopped")
+
     def _process_selected_roi(self) -> None:
         """
         Starts OCR processing in background thread.
@@ -422,18 +467,6 @@ class MainWindow(QMainWindow):
             confidence=confidence,
         )
 
-        QMessageBox.information(
-            self,
-            "OCR result",
-            (
-                f"Reading ID: {reading_id}\n"
-                f"ROI: {roi.name}\n"
-                f"Raw text: {raw_text}\n"
-                f"Confidence: {confidence:.2f}\n"
-                f"Numeric value: {numeric_value}\n\n"
-                f"Debug image:\n{debug_path}"
-            ),
-        )
 
     def _on_ocr_error(self, error_text: str) -> None:
         """
