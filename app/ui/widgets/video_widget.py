@@ -294,3 +294,12 @@ class VideoWidget(QWidget):
         height = int(rect.height() * scale_y)
 
         return QRect(x, y, width, height)
+
+    def clear_roi_regions(self) -> None:
+        """
+        Clears all ROI regions from video widget.
+        """
+
+        self.roi_regions.clear()
+
+        self.update()
