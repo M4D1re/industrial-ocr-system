@@ -57,3 +57,10 @@ class ReadingsPanel(QWidget):
         self.table.setItem(row, 4, QTableWidgetItem(str(reading_id)))
 
         self.table.resizeColumnsToContents()
+
+    def clear(self) -> None:
+        """
+        Clears current readings table.
+        """
+
+        self.table.setRowCount(0)

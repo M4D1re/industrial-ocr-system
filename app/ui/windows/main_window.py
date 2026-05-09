@@ -5,16 +5,19 @@ from app.services.database_cleanup_service import DatabaseCleanupService
 
 from PySide6.QtWidgets import QMessageBox
 
+import shutil
+
 from app.database.reading_repository import ReadingRepository
 
 from app.ui.widgets.readings_panel import ReadingsPanel
 
 from app.ui.dialogs.add_camera_dialog import AddCameraDialog
 
-
+from app.utils.paths import DATABASE_PATH
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QFileDialog,
     QLabel,
     QDockWidget,
     QMainWindow,
@@ -40,7 +43,6 @@ from app.ui.widgets.roi_panel import ROIPanel
 from app.services.camera_manager import CameraManager
 from app.vision.frame_converter import FrameConverter
 
-from app.ui.widgets.analytics_panel import AnalyticsPanel
 from app.ui.widgets.camera_panel import CameraPanel
 from app.ui.widgets.logs_panel import LogsPanel
 from app.ui.widgets.status_panel import StatusPanel
@@ -231,8 +233,6 @@ class MainWindow(QMainWindow):
 
         self._create_logs_dock()
 
-        self._create_analytics_dock()
-
         self._create_status_dock()
 
     def _create_camera_dock(self) -> None:
@@ -329,16 +329,6 @@ class MainWindow(QMainWindow):
 
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
-    def _create_analytics_dock(self) -> None:
-        """
-        Creates analytics dock.
-        """
-
-        dock = QDockWidget("Analytics", self)
-
-        dock.setWidget(AnalyticsPanel())
-
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
 
     def _create_status_dock(self) -> None:
         """
@@ -606,7 +596,7 @@ class MainWindow(QMainWindow):
 
     def _stop_session(self) -> None:
         """
-        Stops recording session.
+        Stops recording session and offers database export.
         """
 
         if self.current_session_id is None:
@@ -617,9 +607,21 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.session_repository.finish(self.current_session_id)
+        answer = QMessageBox.question(
+            self,
+            "Stop Session",
+            (
+                "Ты точно хочешь остановить текущую сессию?\n\n"
+                "После остановки будет предложено сохранить файл базы данных."
+            ),
+        )
+
+        if answer != QMessageBox.Yes:
+            return
 
         finished_session_id = self.current_session_id
+
+        self.session_repository.finish(finished_session_id)
 
         self.current_session_id = None
 
@@ -628,6 +630,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Session stopped: {finished_session_id}"
         )
+
+        self._export_database_after_session_stop(finished_session_id)
 
     def _start_auto_ocr(self) -> None:
         """
@@ -888,6 +892,42 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage("OCR worker finished")
 
+    def _export_database_after_session_stop(
+            self,
+            session_id: int,
+    ) -> None:
+        """
+        Saves current SQLite database file after session stop.
+        """
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save session database",
+            f"session_{session_id}.db",
+            "SQLite Database (*.db)",
+        )
+
+        if not save_path:
+            self.statusBar().showMessage(
+                "Session stopped without database export"
+            )
+            return
+
+        shutil.copy2(
+            DATABASE_PATH,
+            save_path,
+        )
+
+        QMessageBox.information(
+            self,
+            "Database saved",
+            f"База данных сохранена:\n{save_path}",
+        )
+
+        self.statusBar().showMessage(
+            f"Database exported: {save_path}"
+        )
+
     def _clear_session_data(self) -> None:
         """
         Clears session data but keeps cameras and ROI.
@@ -914,6 +954,8 @@ class MainWindow(QMainWindow):
             return
 
         self.database_cleanup_service.clear_session_data()
+
+        self.readings_panel.clear()
 
         self.statusBar().showMessage(
             "Session data cleared"
@@ -949,6 +991,8 @@ class MainWindow(QMainWindow):
         self.camera_manager.stop_all()
 
         self.database_cleanup_service.factory_reset()
+
+        self.readings_panel.clear()
 
         self._discover_usb_cameras()
         self._load_saved_cameras()
