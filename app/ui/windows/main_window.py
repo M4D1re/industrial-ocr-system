@@ -6,6 +6,8 @@ from app.database.reading_repository import ReadingRepository
 
 from app.ui.widgets.readings_panel import ReadingsPanel
 
+from app.ui.dialogs.add_camera_dialog import AddCameraDialog
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QLabel,
@@ -72,6 +74,8 @@ class MainWindow(QMainWindow):
         self.camera_manager = CameraManager()
 
         self._setup_ui()
+
+        self._load_saved_cameras()
 
         self._load_saved_roi_regions()
 
@@ -197,10 +201,19 @@ class MainWindow(QMainWindow):
             Qt.RightDockWidgetArea
         )
 
-        dock.setWidget(CameraPanel())
+        self.camera_panel = CameraPanel()
+
+        self.camera_panel.add_camera_requested.connect(
+            self._open_add_camera_dialog
+        )
+
+        self.camera_panel.camera_selected.connect(
+            self._on_camera_selected
+        )
+
+        dock.setWidget(self.camera_panel)
 
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
-
     def _create_roi_dock(self) -> None:
         """
         Creates ROI dock.
@@ -274,6 +287,66 @@ class MainWindow(QMainWindow):
         dock.setWidget(StatusPanel())
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
+
+    def _open_add_camera_dialog(self) -> None:
+        """
+        Opens add camera dialog and saves camera.
+        """
+
+        dialog = AddCameraDialog()
+
+        if dialog.exec() != dialog.Accepted:
+            return
+
+        name, source = dialog.get_camera_data()
+
+        if not name:
+            QMessageBox.warning(
+                self,
+                "Invalid camera",
+                "Введите имя камеры.",
+            )
+            return
+
+        if not source:
+            QMessageBox.warning(
+                self,
+                "Invalid camera",
+                "Введите источник камеры.",
+            )
+            return
+
+        camera = self.camera_repository.create(
+            name=name,
+            source=source,
+            enabled=True,
+        )
+
+        self.camera_panel.add_camera(camera)
+
+        self.statusBar().showMessage(
+            f"Camera added: {camera.name}"
+        )
+
+    def _on_camera_selected(self, camera) -> None:
+        """
+        Handles camera selection.
+
+        Camera switching will be implemented in the next step.
+        """
+
+        self.statusBar().showMessage(
+            f"Selected camera: {camera.name} [{camera.source}]"
+        )
+
+    def _load_saved_cameras(self) -> None:
+        """
+        Loads cameras from database into camera panel.
+        """
+
+        cameras = self.camera_repository.list_all()
+
+        self.camera_panel.set_cameras(cameras)
 
     def _load_saved_roi_regions(self) -> None:
         """
