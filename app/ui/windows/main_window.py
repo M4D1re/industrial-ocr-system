@@ -305,7 +305,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() != dialog.Accepted:
             return
 
-        name, source = dialog.get_camera_data()
+        name, source_type, source = dialog.get_camera_data()
 
         if not name:
             QMessageBox.warning(
@@ -323,6 +323,22 @@ class MainWindow(QMainWindow):
             )
             return
 
+        if source_type == "USB" and not source.isdigit():
+            QMessageBox.warning(
+                self,
+                "Invalid USB source",
+                "Для USB-камеры источник должен быть числом: 0, 1, 2...",
+            )
+            return
+
+        if source_type == "RTSP" and not source.lower().startswith("rtsp://"):
+            QMessageBox.warning(
+                self,
+                "Invalid RTSP URL",
+                "RTSP-адрес должен начинаться с rtsp://",
+            )
+            return
+
         camera = self.camera_repository.create(
             name=name,
             source=source,
@@ -332,7 +348,7 @@ class MainWindow(QMainWindow):
         self.camera_panel.add_camera(camera)
 
         self.statusBar().showMessage(
-            f"Camera added: {camera.name}"
+            f"Camera added: {camera.name} [{camera.source}]"
         )
 
     def _on_camera_selected(self, camera) -> None:
