@@ -8,9 +8,11 @@ from app.ui.widgets.readings_panel import ReadingsPanel
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QLabel,
     QDockWidget,
     QMainWindow,
     QMessageBox,
+    QSpinBox,
     QStatusBar,
     QToolBar,
 )
@@ -50,6 +52,8 @@ class MainWindow(QMainWindow):
         self.reading_repository = ReadingRepository(self.database)
 
         self.ocr_worker: OCRWorker | None = None
+
+        self.auto_ocr_enabled = False
 
         self.auto_ocr_timer = QTimer(self)
 
@@ -98,6 +102,31 @@ class MainWindow(QMainWindow):
         process_roi_action.triggered.connect(
             self._process_selected_roi
         )
+
+        toolbar.addSeparator()
+
+        toolbar.addWidget(QLabel("Hours:"))
+
+        self.polling_hours_spinbox = QSpinBox()
+        self.polling_hours_spinbox.setRange(0, 24)
+        self.polling_hours_spinbox.setValue(0)
+        toolbar.addWidget(self.polling_hours_spinbox)
+
+        toolbar.addWidget(QLabel("Minutes:"))
+
+        self.polling_minutes_spinbox = QSpinBox()
+        self.polling_minutes_spinbox.setRange(0, 59)
+        self.polling_minutes_spinbox.setValue(0)
+        toolbar.addWidget(self.polling_minutes_spinbox)
+
+        toolbar.addWidget(QLabel("Seconds:"))
+
+        self.polling_seconds_spinbox = QSpinBox()
+        self.polling_seconds_spinbox.setRange(1, 59)
+        self.polling_seconds_spinbox.setValue(5)
+        toolbar.addWidget(self.polling_seconds_spinbox)
+
+        toolbar.addSeparator()
 
         start_auto_ocr_action = toolbar.addAction("Start Auto OCR")
         start_auto_ocr_action.triggered.connect(
@@ -359,12 +388,26 @@ class MainWindow(QMainWindow):
             )
             return
 
-        interval_ms = self.video_widget.roi_regions[0].polling_interval_sec * 1000
+        hours = self.polling_hours_spinbox.value()
+        minutes = self.polling_minutes_spinbox.value()
+        seconds = self.polling_seconds_spinbox.value()
 
-        self.auto_ocr_timer.start(interval_ms)
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+
+        if total_seconds <= 0:
+            QMessageBox.warning(
+                self,
+                "Invalid interval",
+                "Периодичность должна быть больше 0 секунд.",
+            )
+            return
+
+        self.auto_ocr_enabled = True
+
+        self.auto_ocr_timer.start(total_seconds * 1000)
 
         self.statusBar().showMessage(
-            f"Auto OCR started. Interval: {interval_ms // 1000} sec"
+            f"Auto OCR started. Interval: {total_seconds} sec"
         )
 
     def _stop_auto_ocr(self) -> None:
@@ -372,9 +415,12 @@ class MainWindow(QMainWindow):
         Stops automatic OCR polling.
         """
 
+        self.auto_ocr_enabled = False
+
         self.auto_ocr_timer.stop()
 
         self.statusBar().showMessage("Auto OCR stopped")
+
 
     def _process_selected_roi(self) -> None:
         """
@@ -382,11 +428,17 @@ class MainWindow(QMainWindow):
         """
 
         if self.ocr_worker is not None and self.ocr_worker.isRunning():
-            QMessageBox.information(
-                self,
-                "OCR is running",
-                "OCR уже выполняется. Дождись завершения.",
-            )
+            if self.auto_ocr_enabled:
+                self.statusBar().showMessage(
+                    "OCR is still running. Auto tick skipped."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "OCR is running",
+                    "OCR уже выполняется. Дождись завершения.",
+                )
+
             return
 
         if self.video_widget.last_cv_frame is None:
