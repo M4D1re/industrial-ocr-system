@@ -2,7 +2,6 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QMessageBox
 
-from app.ocr.ocr_pipeline import OCRPipeline
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -12,6 +11,8 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QToolBar,
 )
+
+from app.services.ocr_worker import OCRWorker
 
 from app.database.camera_repository import CameraRepository
 from app.database.database_manager import DatabaseManager
@@ -43,7 +44,8 @@ class MainWindow(QMainWindow):
 
         self.roi_repository = ROIRepository(self.database)
 
-        self.ocr_pipeline = OCRPipeline()
+
+        self.ocr_worker: OCRWorker | None = None
 
         self.default_camera = (
             self.camera_repository.get_or_create_default_camera()
@@ -80,7 +82,6 @@ class MainWindow(QMainWindow):
         """
 
         toolbar = QToolBar("Main Toolbar")
-
         toolbar.setMovable(False)
 
         process_roi_action = toolbar.addAction("Process ROI")
@@ -309,8 +310,16 @@ class MainWindow(QMainWindow):
 
     def _process_selected_roi(self) -> None:
         """
-        Processes first ROI and saves debug image.
+        Starts OCR processing in background thread.
         """
+
+        if self.ocr_worker is not None and self.ocr_worker.isRunning():
+            QMessageBox.information(
+                self,
+                "OCR is running",
+                "OCR уже выполняется. Дождись завершения.",
+            )
+            return
 
         if self.video_widget.last_cv_frame is None:
             QMessageBox.warning(
@@ -330,35 +339,82 @@ class MainWindow(QMainWindow):
 
         roi = self.video_widget.roi_regions[0]
 
-        try:
-            processed = self.ocr_pipeline.process_roi(
-                self.video_widget.last_cv_frame,
-                roi,
-            )
-        except ValueError as error:
-            QMessageBox.critical(
-                self,
-                "OCR preprocessing error",
-                str(error),
-            )
-            return
-
         debug_dir = Path("data/debug")
-
         debug_dir.mkdir(parents=True, exist_ok=True)
 
         debug_path = debug_dir / f"roi_{roi.id}_processed.png"
 
-        self.ocr_pipeline.save_debug_image(
-            processed,
+        self.statusBar().showMessage(
+            f"OCR processing started for {roi.name}..."
+        )
+
+        self.ocr_worker = OCRWorker(
+            self.video_widget.last_cv_frame,
+            roi,
             str(debug_path),
+        )
+
+        self.ocr_worker.result_ready.connect(
+            self._on_ocr_result_ready
+        )
+
+        self.ocr_worker.error_occurred.connect(
+            self._on_ocr_error
+        )
+
+        self.ocr_worker.finished.connect(
+            self._on_ocr_finished
+        )
+
+        self.ocr_worker.start()
+
+    def _on_ocr_result_ready(
+            self,
+            roi,
+            raw_text,
+            confidence: float,
+            numeric_value,
+            debug_path: str,
+    ) -> None:
+        """
+        Handles OCR result from background worker.
+        """
+
+        self.statusBar().showMessage(
+            f"OCR completed for {roi.name}"
         )
 
         QMessageBox.information(
             self,
-            "ROI processed",
-            f"Обработанное изображение сохранено:\n{debug_path}",
+            "OCR result",
+            (
+                f"ROI: {roi.name}\n"
+                f"Raw text: {raw_text}\n"
+                f"Confidence: {confidence:.2f}\n"
+                f"Numeric value: {numeric_value}\n\n"
+                f"Debug image:\n{debug_path}"
+            ),
         )
+
+    def _on_ocr_error(self, error_text: str) -> None:
+        """
+        Handles OCR worker error.
+        """
+
+        self.statusBar().showMessage("OCR error")
+
+        QMessageBox.critical(
+            self,
+            "OCR error",
+            error_text,
+        )
+
+    def _on_ocr_finished(self) -> None:
+        """
+        Handles OCR worker finish.
+        """
+
+        self.statusBar().showMessage("OCR worker finished")
 
     def closeEvent(self, event) -> None:
         """
