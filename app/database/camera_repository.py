@@ -106,3 +106,27 @@ class CameraRepository:
             source="0",
             enabled=True,
         )
+
+    def set_enabled(
+            self,
+            camera_id: int,
+            enabled: bool,
+    ) -> None:
+        """
+        Enables or disables camera.
+        """
+
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE cameras
+                SET enabled = ?
+                WHERE id = ?
+                """,
+                (
+                    int(enabled),
+                    camera_id,
+                ),
+            )
+
+            connection.commit()

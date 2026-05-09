@@ -21,7 +21,11 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
-from app.services.ocr_worker import OCRWorker
+from app.models.camera_model import CameraModel
+from app.services.multi_camera_ocr_worker import (
+    MultiCameraOCRWorker,
+    OCRCameraTask,
+)
 
 from app.database.camera_repository import CameraRepository
 from app.database.database_manager import DatabaseManager
@@ -56,7 +60,9 @@ class MainWindow(QMainWindow):
 
         self.reading_repository = ReadingRepository(self.database)
 
-        self.ocr_worker: OCRWorker | None = None
+        self.ocr_worker: MultiCameraOCRWorker | None = None
+
+
 
         self.auto_ocr_enabled = False
 
@@ -69,6 +75,8 @@ class MainWindow(QMainWindow):
         self.default_camera = (
             self.camera_repository.get_or_create_default_camera()
         )
+
+        self.active_display_camera: CameraModel = self.default_camera
 
         self.setWindowTitle("Industrial OCR System")
 
@@ -218,6 +226,14 @@ class MainWindow(QMainWindow):
             self._on_camera_selected
         )
 
+        self.camera_panel.enable_camera_requested.connect(
+            self._enable_camera
+        )
+
+        self.camera_panel.disable_camera_requested.connect(
+            self._disable_camera
+        )
+
         dock.setWidget(self.camera_panel)
 
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
@@ -238,6 +254,15 @@ class MainWindow(QMainWindow):
         self.roi_panel.delete_requested.connect(
             self.video_widget.delete_roi
         )
+
+        self.roi_panel.enable_requested.connect(
+            self._enable_roi
+        )
+
+        self.roi_panel.disable_requested.connect(
+            self._disable_roi
+        )
+
 
         dock.setWidget(self.roi_panel)
 
@@ -353,13 +378,24 @@ class MainWindow(QMainWindow):
 
     def _on_camera_selected(self, camera) -> None:
         """
-        Handles camera selection.
-
-        Camera switching will be implemented in the next step.
+        Selects camera for display only.
         """
 
+        self.active_display_camera = camera
+
+        self._load_saved_roi_regions()
+
+        latest_frame = self.camera_manager.get_latest_frame(camera.id)
+
+        if latest_frame is not None:
+            self.video_widget.update_cv_frame(latest_frame)
+
+            image = FrameConverter.convert_cv_to_qt(latest_frame)
+
+            self.video_widget.update_frame(image)
+
         self.statusBar().showMessage(
-            f"Selected camera: {camera.name} [{camera.source}]"
+            f"Displaying camera: {camera.name} [{camera.source}]"
         )
 
     def _discover_usb_cameras(self) -> None:
@@ -411,25 +447,39 @@ class MainWindow(QMainWindow):
 
     def _initialize_test_camera(self) -> None:
         """
-        Initializes default test camera.
+        Starts all enabled cameras.
         """
 
-        camera = self.camera_manager.add_camera(
-            self.default_camera.source
+        cameras = self.camera_repository.list_all()
+
+        self.camera_manager.frame_ready.connect(
+            self._on_frame_ready
         )
 
-        camera.frame_ready.connect(self._on_frame_ready)
-
-        camera.connection_changed.connect(
+        self.camera_manager.connection_changed.connect(
             self._on_camera_connection_changed
         )
 
-        camera.fps_updated.connect(self._on_fps_updated)
+        self.camera_manager.fps_updated.connect(
+            self._on_fps_updated
+        )
 
-    def _on_frame_ready(self, frame) -> None:
+        self.camera_manager.start_cameras(cameras)
+
+    def _on_frame_ready(
+            self,
+            camera_id: int,
+            frame,
+    ) -> None:
         """
-        Receives camera frame from background camera thread.
+        Receives camera frame.
+
+        Only selected camera is displayed,
+        but all cameras continue working in background.
         """
+
+        if camera_id != self.active_display_camera.id:
+            return
 
         self.video_widget.update_cv_frame(frame)
 
@@ -439,24 +489,33 @@ class MainWindow(QMainWindow):
 
     def _on_camera_connection_changed(
             self,
+            camera_id: int,
             connected: bool,
     ) -> None:
         """
-        Updates UI when camera connection status changes.
+        Updates camera connection status.
         """
 
-        if connected:
-            self.statusBar().showMessage("Camera connected")
-        else:
-            self.statusBar().showMessage("Camera disconnected")
-
-    def _on_fps_updated(self, fps: float) -> None:
-        """
-        Updates bottom status bar with current FPS.
-        """
+        status = "connected" if connected else "disconnected"
 
         self.statusBar().showMessage(
-            f"Live Stream | FPS: {fps:.2f}"
+            f"Camera {camera_id}: {status}"
+        )
+
+    def _on_fps_updated(
+            self,
+            camera_id: int,
+            fps: float,
+    ) -> None:
+        """
+        Updates FPS status for selected camera.
+        """
+
+        if camera_id != self.active_display_camera.id:
+            return
+
+        self.statusBar().showMessage(
+            f"Camera {camera_id} | FPS: {fps:.2f}"
         )
 
     def _on_roi_created(self, roi) -> None:
@@ -537,10 +596,74 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage("Auto OCR stopped")
 
+    def _enable_camera(self, camera_id: int) -> None:
+        """
+        Enables camera and starts its stream.
+        """
+
+        self.camera_repository.set_enabled(camera_id, True)
+
+        cameras = self.camera_repository.list_all()
+
+        self.camera_panel.set_cameras(cameras)
+
+        camera = next(
+            item for item in cameras if item.id == camera_id
+        )
+
+        self.camera_manager.start_camera(camera)
+
+        self.statusBar().showMessage(
+            f"Camera enabled: {camera.name}"
+        )
+
+    def _disable_camera(self, camera_id: int) -> None:
+        """
+        Disables camera and stops its stream.
+        """
+
+        self.camera_repository.set_enabled(camera_id, False)
+
+        self.camera_manager.stop_camera(camera_id)
+
+        cameras = self.camera_repository.list_all()
+
+        self.camera_panel.set_cameras(cameras)
+
+        self.statusBar().showMessage(
+            f"Camera disabled: {camera_id}"
+        )
+
+    def _enable_roi(self, roi_id: int) -> None:
+        """
+        Enables ROI.
+        """
+
+        self.roi_repository.set_enabled(roi_id, True)
+
+        self._load_saved_roi_regions()
+
+        self.statusBar().showMessage(
+            f"ROI enabled: {roi_id}"
+        )
+
+    def _disable_roi(self, roi_id: int) -> None:
+        """
+        Disables ROI.
+        """
+
+        self.roi_repository.set_enabled(roi_id, False)
+
+        self._load_saved_roi_regions()
+
+        self.statusBar().showMessage(
+            f"ROI disabled: {roi_id}"
+        )
+
 
     def _process_selected_roi(self) -> None:
         """
-        Starts OCR processing in background thread.
+        Starts OCR processing for all enabled cameras and enabled ROI regions.
         """
 
         if self.ocr_worker is not None and self.ocr_worker.isRunning():
@@ -557,37 +680,58 @@ class MainWindow(QMainWindow):
 
             return
 
-        if self.video_widget.last_cv_frame is None:
-            QMessageBox.warning(
-                self,
-                "No frame",
-                "Кадр с камеры еще не получен.",
-            )
-            return
+        cameras = [
+            camera
+            for camera in self.camera_repository.list_all()
+            if camera.enabled
+        ]
 
-        if not self.video_widget.roi_regions:
-            QMessageBox.warning(
-                self,
-                "No ROI",
-                "Сначала выдели хотя бы одну ROI-область.",
-            )
-            return
+        tasks: list[OCRCameraTask] = []
 
-        roi = self.video_widget.roi_regions[0]
+        for camera in cameras:
+            frame = self.camera_manager.get_latest_frame(camera.id)
+
+            if frame is None:
+                continue
+
+            roi_regions = self.roi_repository.list_enabled_by_camera(
+                camera.id
+            )
+
+            if not roi_regions:
+                continue
+
+            tasks.append(
+                OCRCameraTask(
+                    camera=camera,
+                    frame=frame,
+                    roi_regions=roi_regions,
+                )
+            )
+
+        if not tasks:
+            if not self.auto_ocr_enabled:
+                QMessageBox.warning(
+                    self,
+                    "No OCR tasks",
+                    "Нет активных камер с кадрами и включенными ROI.",
+                )
+
+            self.statusBar().showMessage("No OCR tasks available")
+            return
 
         debug_dir = Path("data/debug")
         debug_dir.mkdir(parents=True, exist_ok=True)
 
-        debug_path = debug_dir / f"roi_{roi.id}_processed.png"
+        roi_count = sum(len(task.roi_regions) for task in tasks)
 
         self.statusBar().showMessage(
-            f"OCR processing started for {roi.name}..."
+            f"OCR started: {len(tasks)} cameras, {roi_count} ROI"
         )
 
-        self.ocr_worker = OCRWorker(
-            self.video_widget.last_cv_frame,
-            roi,
-            str(debug_path),
+        self.ocr_worker = MultiCameraOCRWorker(
+            tasks=tasks,
+            debug_dir=str(debug_dir),
         )
 
         self.ocr_worker.result_ready.connect(
@@ -606,6 +750,7 @@ class MainWindow(QMainWindow):
 
     def _on_ocr_result_ready(
             self,
+            camera,
             roi,
             raw_text,
             confidence: float,
@@ -613,11 +758,11 @@ class MainWindow(QMainWindow):
             debug_path: str,
     ) -> None:
         """
-        Handles OCR result from background worker.
+        Handles OCR result from multi-camera worker.
         """
 
         self.statusBar().showMessage(
-            f"OCR completed for {roi.name}"
+            f"OCR completed: {camera.name} / {roi.name}"
         )
 
         reading_id = self.reading_repository.create(
@@ -629,12 +774,11 @@ class MainWindow(QMainWindow):
 
         self.readings_panel.update_reading(
             reading_id=reading_id,
-            roi_name=roi.name,
+            roi_name=f"{camera.name} / {roi.name}",
             value=numeric_value,
             raw_text=raw_text,
             confidence=confidence,
         )
-
 
     def _on_ocr_error(self, error_text: str) -> None:
         """

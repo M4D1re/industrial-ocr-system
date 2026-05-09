@@ -175,11 +175,15 @@ class VideoWidget(QWidget):
         Draws saved ROI rectangles.
         """
 
-        pen = QPen(Qt.green)
-        pen.setWidth(2)
-        painter.setPen(pen)
-
         for roi in self.roi_regions:
+            if roi.enabled:
+                pen = QPen(Qt.green)
+            else:
+                pen = QPen(Qt.gray)
+
+            pen.setWidth(2)
+            painter.setPen(pen)
+
             rect = self._frame_rect_to_widget_rect(
                 QRect(
                     roi.x,
@@ -196,7 +200,7 @@ class VideoWidget(QWidget):
 
             painter.drawText(
                 rect.topLeft() + QPoint(4, -4),
-                roi.name,
+                f"{roi.name} {'ON' if roi.enabled else 'OFF'}",
             )
 
     def delete_roi(self, roi_id: int) -> None:

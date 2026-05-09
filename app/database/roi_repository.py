@@ -97,3 +97,64 @@ class ROIRepository:
             )
             for row in rows
         ]
+
+    def list_enabled_by_camera(self, camera_id: int) -> list[ROIModel]:
+        """
+        Loads enabled ROI regions by camera id.
+        """
+
+        query = """
+                SELECT id, \
+                       name, \
+                       x, \
+                       y, \
+                       width, \
+                       height, \
+                       enabled, \
+                       polling_interval_sec
+                FROM roi_regions
+                WHERE camera_id = ?
+                  AND enabled = 1
+                ORDER BY id \
+                """
+
+        with self.database.connect() as connection:
+            rows = connection.execute(query, (camera_id,)).fetchall()
+
+        return [
+            ROIModel(
+                id=row["id"],
+                name=row["name"],
+                x=row["x"],
+                y=row["y"],
+                width=row["width"],
+                height=row["height"],
+                enabled=bool(row["enabled"]),
+                polling_interval_sec=row["polling_interval_sec"],
+            )
+            for row in rows
+        ]
+
+    def set_enabled(
+            self,
+            roi_id: int,
+            enabled: bool,
+    ) -> None:
+        """
+        Enables or disables ROI.
+        """
+
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE roi_regions
+                SET enabled = ?
+                WHERE id = ?
+                """,
+                (
+                    int(enabled),
+                    roi_id,
+                ),
+            )
+
+            connection.commit()
