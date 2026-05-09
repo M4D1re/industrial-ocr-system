@@ -23,7 +23,7 @@ class DatabaseCleanupService:
 
     def factory_reset(self) -> None:
         """
-        Removes all user data.
+        Removes all user data and resets SQLite autoincrement counters.
         """
 
         with self.database.connect() as connection:
@@ -32,5 +32,7 @@ class DatabaseCleanupService:
             connection.execute("DELETE FROM sessions")
             connection.execute("DELETE FROM roi_regions")
             connection.execute("DELETE FROM cameras")
+
+            connection.execute("DELETE FROM sqlite_sequence")
 
             connection.commit()

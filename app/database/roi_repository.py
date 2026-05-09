@@ -51,6 +51,8 @@ class ROIRepository:
     def delete(self, roi_id: int) -> None:
         """
         Deletes ROI from database.
+
+        If all ROI records are deleted, resets ROI autoincrement counter.
         """
 
         with self.database.connect() as connection:
@@ -59,8 +61,16 @@ class ROIRepository:
                 (roi_id,),
             )
 
-            connection.commit()
+            remaining_count = connection.execute(
+                "SELECT COUNT(*) FROM roi_regions"
+            ).fetchone()[0]
 
+            if remaining_count == 0:
+                connection.execute(
+                    "DELETE FROM sqlite_sequence WHERE name = 'roi_regions'"
+                )
+
+            connection.commit()
     def list_by_camera(self, camera_id: int) -> list[ROIModel]:
         """
         Loads ROI regions by camera id.

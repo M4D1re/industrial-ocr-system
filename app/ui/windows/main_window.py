@@ -450,17 +450,18 @@ class MainWindow(QMainWindow):
 
     def _load_saved_roi_regions(self) -> None:
         """
-        Loads saved ROI regions from database.
+        Loads saved ROI regions for active camera.
         """
 
+        self.video_widget.clear_roi_regions()
+
         roi_regions = self.roi_repository.list_by_camera(
-            self.default_camera.id
+            self.active_display_camera.id
         )
 
         self.video_widget.set_roi_regions(roi_regions)
 
-        for roi in roi_regions:
-            self.roi_panel.add_roi(roi)
+        self.roi_panel.set_roi_regions(roi_regions)
 
         self.statusBar().showMessage(
             f"Loaded ROI regions: {len(roi_regions)}"

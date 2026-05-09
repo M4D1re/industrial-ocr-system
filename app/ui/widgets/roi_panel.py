@@ -135,3 +135,14 @@ class ROIPanel(QWidget):
 
         if roi_id is not None:
             self.disable_requested.emit(roi_id)
+
+    def set_roi_regions(self, roi_regions: list[ROIModel]) -> None:
+        """
+        Replaces ROI list with actual ROI regions.
+        """
+
+        self.roi_items.clear()
+        self.roi_list.clear()
+
+        for roi in roi_regions:
+            self.add_roi(roi)
