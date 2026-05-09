@@ -20,6 +20,11 @@ class CameraRepository:
         Creates camera record.
         """
 
+        existing_camera = self.get_by_source(source)
+
+        if existing_camera is not None:
+            return existing_camera
+
         with self.database.connect() as connection:
             cursor = connection.execute(
                 """
@@ -41,6 +46,31 @@ class CameraRepository:
                 source=source,
                 enabled=enabled,
             )
+
+    def get_by_source(self, source: str) -> CameraModel | None:
+        """
+        Returns camera by source if it exists.
+        """
+
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, name, source, enabled
+                FROM cameras
+                WHERE source = ?
+                """,
+                (source,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return CameraModel(
+            id=row["id"],
+            name=row["name"],
+            source=row["source"],
+            enabled=bool(row["enabled"]),
+        )
 
     def list_all(self) -> list[CameraModel]:
         """
@@ -69,30 +99,10 @@ class CameraRepository:
     def get_or_create_default_camera(self) -> CameraModel:
         """
         Returns default webcam camera record.
-
-        For now we use source '0' as default USB webcam.
         """
 
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
-                SELECT id, name, source, enabled
-                FROM cameras
-                WHERE source = ?
-                """,
-                ("0",),
-            ).fetchone()
-
-            if row:
-                return CameraModel(
-                    id=row["id"],
-                    name=row["name"],
-                    source=row["source"],
-                    enabled=bool(row["enabled"]),
-                )
-
         return self.create(
-            name="Default Webcam",
+            name="USB Camera 0",
             source="0",
             enabled=True,
         )

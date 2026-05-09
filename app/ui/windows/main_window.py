@@ -8,6 +8,8 @@ from app.ui.widgets.readings_panel import ReadingsPanel
 
 from app.ui.dialogs.add_camera_dialog import AddCameraDialog
 
+
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QLabel,
@@ -23,6 +25,7 @@ from app.services.ocr_worker import OCRWorker
 
 from app.database.camera_repository import CameraRepository
 from app.database.database_manager import DatabaseManager
+from app.services.camera_discovery_service import CameraDiscoveryService
 from app.database.roi_repository import ROIRepository
 
 from app.ui.widgets.roi_panel import ROIPanel
@@ -73,7 +76,11 @@ class MainWindow(QMainWindow):
 
         self.camera_manager = CameraManager()
 
+        self.camera_discovery_service = CameraDiscoveryService()
+
         self._setup_ui()
+
+        self._discover_usb_cameras()
 
         self._load_saved_cameras()
 
@@ -337,6 +344,26 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(
             f"Selected camera: {camera.name} [{camera.source}]"
+        )
+
+    def _discover_usb_cameras(self) -> None:
+        """
+        Discovers available USB cameras and saves them to database.
+        """
+
+        sources = self.camera_discovery_service.discover_usb_cameras(
+            max_index=10
+        )
+
+        for source in sources:
+            self.camera_repository.create(
+                name=f"USB Camera {source}",
+                source=source,
+                enabled=True,
+            )
+
+        self.statusBar().showMessage(
+            f"Discovered USB cameras: {len(sources)}"
         )
 
     def _load_saved_cameras(self) -> None:
