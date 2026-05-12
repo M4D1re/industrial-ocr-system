@@ -329,10 +329,11 @@ class MainWindow(QMainWindow):
 
         dock = QDockWidget("Logs", self)
 
-        dock.setWidget(LogsPanel())
+        self.logs_panel = LogsPanel()
+
+        dock.setWidget(self.logs_panel)
 
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
-
 
     def _create_status_dock(self) -> None:
         """
@@ -341,10 +342,11 @@ class MainWindow(QMainWindow):
 
         dock = QDockWidget("OCR Status", self)
 
-        dock.setWidget(StatusPanel())
+        self.status_panel = StatusPanel()
+
+        dock.setWidget(self.status_panel)
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
-
     def _open_add_camera_dialog(self) -> None:
         """
         Opens add camera dialog and saves camera.
@@ -492,6 +494,11 @@ class MainWindow(QMainWindow):
 
         self.camera_manager.start_cameras(cameras)
 
+        active_count = len([camera for camera in cameras if camera.enabled])
+
+        self.status_panel.set_camera_status(active_count)
+
+        self._log(f"Started enabled cameras: {active_count}")
     def _on_frame_ready(
             self,
             camera_id: int,
@@ -559,9 +566,7 @@ class MainWindow(QMainWindow):
 
         self.roi_panel.add_roi(roi)
 
-        self.statusBar().showMessage(
-            f"ROI saved: {roi.name}"
-        )
+        self._log(f"ROI saved: {roi.name}")
 
     def _on_roi_deleted(self, roi_id: int) -> None:
         """
@@ -572,9 +577,7 @@ class MainWindow(QMainWindow):
 
         self.roi_panel.remove_roi(roi_id)
 
-        self.statusBar().showMessage(
-            f"ROI deleted: {roi_id}"
-        )
+        self._log(f"ROI deleted: {roi_id}")
 
     def _start_session(self) -> None:
         """
@@ -595,9 +598,25 @@ class MainWindow(QMainWindow):
             session_name
         )
 
-        self.statusBar().showMessage(
-            f"Session started: {self.current_session_id}"
+        self.status_panel.set_session_status(
+            f"active #{self.current_session_id}"
         )
+
+        self._log(f"Session started: {self.current_session_id}")
+
+    def _log(
+            self,
+            message: str,
+            level: str = "INFO",
+    ) -> None:
+        """
+        Writes message to logs panel and status bar.
+        """
+
+        if hasattr(self, "logs_panel"):
+            self.logs_panel.add_log(message, level)
+
+        self.statusBar().showMessage(message)
 
     def _stop_session(self) -> None:
         """
@@ -630,11 +649,11 @@ class MainWindow(QMainWindow):
 
         self.current_session_id = None
 
+        self.status_panel.set_session_status("stopped")
+
         self._stop_auto_ocr()
 
-        self.statusBar().showMessage(
-            f"Session stopped: {finished_session_id}"
-        )
+        self._log(f"Session stopped: {finished_session_id}")
 
         self._export_database_after_session_stop(finished_session_id)
 
@@ -677,9 +696,11 @@ class MainWindow(QMainWindow):
 
         self.auto_ocr_timer.start(total_seconds * 1000)
 
-        self.statusBar().showMessage(
-            f"Auto OCR started. Interval: {total_seconds} sec"
+        self.status_panel.set_auto_ocr_status(
+            f"running, interval {total_seconds} sec"
         )
+
+        self._log(f"Auto OCR started. Interval: {total_seconds} sec")
 
     def _stop_auto_ocr(self) -> None:
         """
@@ -690,8 +711,9 @@ class MainWindow(QMainWindow):
 
         self.auto_ocr_timer.stop()
 
-        self.statusBar().showMessage("Auto OCR stopped")
+        self.status_panel.set_auto_ocr_status("stopped")
 
+        self._log("Auto OCR stopped")
     def _enable_camera(self, camera_id: int) -> None:
         """
         Enables camera and starts its stream.
@@ -708,6 +730,14 @@ class MainWindow(QMainWindow):
         )
 
         self.camera_manager.start_camera(camera)
+
+        enabled_count = len(
+            [camera for camera in self.camera_repository.list_all() if camera.enabled]
+        )
+
+        self.status_panel.set_camera_status(enabled_count)
+
+        self._log(f"Camera enabled: {camera.name}")
 
         self.statusBar().showMessage(
             f"Camera enabled: {camera.name}"
@@ -726,6 +756,14 @@ class MainWindow(QMainWindow):
 
         self.camera_panel.set_cameras(cameras)
 
+        enabled_count = len(
+            [camera for camera in self.camera_repository.list_all() if camera.enabled]
+        )
+
+        self.status_panel.set_camera_status(enabled_count)
+
+        self._log(f"Camera disabled: {camera_id}")
+
         self.statusBar().showMessage(
             f"Camera disabled: {camera_id}"
         )
@@ -739,9 +777,7 @@ class MainWindow(QMainWindow):
 
         self._load_saved_roi_regions()
 
-        self.statusBar().showMessage(
-            f"ROI enabled: {roi_id}"
-        )
+        self._log(f"ROI enabled: {roi_id}")
 
     def _disable_roi(self, roi_id: int) -> None:
         """
@@ -752,9 +788,7 @@ class MainWindow(QMainWindow):
 
         self._load_saved_roi_regions()
 
-        self.statusBar().showMessage(
-            f"ROI disabled: {roi_id}"
-        )
+        self._log(f"ROI disabled: {roi_id}")
 
 
     def _process_selected_roi(self) -> None:
@@ -813,7 +847,13 @@ class MainWindow(QMainWindow):
                     "Нет активных камер с кадрами и включенными ROI.",
                 )
 
-            self.statusBar().showMessage("No OCR tasks available")
+            self.status_panel.set_ocr_status(
+                f"running: {len(tasks)} cameras, {roi_count} ROI"
+            )
+
+            self._log(
+                f"OCR started: {len(tasks)} cameras, {roi_count} ROI"
+            )
             return
 
         debug_dir = Path("data/debug")
@@ -877,10 +917,17 @@ class MainWindow(QMainWindow):
             confidence=confidence,
         )
 
+        self.status_panel.set_last_result(
+            f"{camera.name} / {roi.name}: {numeric_value}"
+        )
+
     def _on_ocr_error(self, error_text: str) -> None:
         """
         Handles OCR worker error.
         """
+
+        self.status_panel.set_ocr_status("error")
+        self._log("OCR error occurred", "ERROR")
 
         self.statusBar().showMessage("OCR error")
 
@@ -895,8 +942,9 @@ class MainWindow(QMainWindow):
         Handles OCR worker finish.
         """
 
-        self.statusBar().showMessage("OCR worker finished")
+        self.status_panel.set_ocr_status("idle")
 
+        self._log("OCR worker finished")
     def _export_database_after_session_stop(
             self,
             session_id: int,
