@@ -531,10 +531,12 @@ class MainWindow(QMainWindow):
 
         status = "connected" if connected else "disconnected"
 
-        self.statusBar().showMessage(
-            f"Camera {camera_id}: {status}"
-        )
+        level = "INFO" if connected else "WARNING"
 
+        self._log(
+            f"Camera {camera_id}: {status}",
+            level,
+        )
     def _on_fps_updated(
             self,
             camera_id: int,
@@ -798,8 +800,9 @@ class MainWindow(QMainWindow):
 
         if self.ocr_worker is not None and self.ocr_worker.isRunning():
             if self.auto_ocr_enabled:
-                self.statusBar().showMessage(
-                    "OCR is still running. Auto tick skipped."
+                self._log(
+                    "OCR is still running. Auto polling tick skipped.",
+                    "WARNING",
                 )
             else:
                 QMessageBox.information(
@@ -847,19 +850,26 @@ class MainWindow(QMainWindow):
                     "Нет активных камер с кадрами и включенными ROI.",
                 )
 
-            self.status_panel.set_ocr_status(
-                f"running: {len(tasks)} cameras, {roi_count} ROI"
-            )
-
             self._log(
-                f"OCR started: {len(tasks)} cameras, {roi_count} ROI"
+                "No OCR tasks available: no active cameras with frames and enabled ROI",
+                "WARNING",
             )
-            return
 
+            self.status_panel.set_ocr_status("idle")
+
+            return
         debug_dir = Path("data/debug")
         debug_dir.mkdir(parents=True, exist_ok=True)
 
         roi_count = sum(len(task.roi_regions) for task in tasks)
+
+        self.status_panel.set_ocr_status(
+            f"running: {len(tasks)} cameras, {roi_count} ROI"
+        )
+
+        self._log(
+            f"OCR started: {len(tasks)} cameras, {roi_count} ROI"
+        )
 
         self.statusBar().showMessage(
             f"OCR started: {len(tasks)} cameras, {roi_count} ROI"
@@ -921,15 +931,41 @@ class MainWindow(QMainWindow):
             f"{camera.name} / {roi.name}: {numeric_value}"
         )
 
+        if numeric_value is None:
+            self._log(
+                (
+                    f"OCR empty result | "
+                    f"Camera: {camera.name} | "
+                    f"ROI: {roi.name} | "
+                    f"Raw: '{raw_text}' | "
+                    f"Confidence: {confidence:.2f}"
+                ),
+                "WARNING",
+            )
+        else:
+            self._log(
+                (
+                    f"OCR success | "
+                    f"Camera: {camera.name} | "
+                    f"ROI: {roi.name} | "
+                    f"Value: {numeric_value} | "
+                    f"Raw: '{raw_text}' | "
+                    f"Confidence: {confidence:.2f}"
+                ),
+                "INFO",
+            )
+
     def _on_ocr_error(self, error_text: str) -> None:
         """
         Handles OCR worker error.
         """
 
         self.status_panel.set_ocr_status("error")
-        self._log("OCR error occurred", "ERROR")
 
-        self.statusBar().showMessage("OCR error")
+        self._log(
+            "OCR worker failed. See error dialog for details.",
+            "ERROR",
+        )
 
         QMessageBox.critical(
             self,
