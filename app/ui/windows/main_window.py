@@ -7,6 +7,8 @@ from PySide6.QtWidgets import QMessageBox
 
 import shutil
 
+from app.services.session_export_service import SessionExportService
+
 from app.database.reading_repository import ReadingRepository
 
 from app.ui.widgets.readings_panel import ReadingsPanel
@@ -68,6 +70,8 @@ class MainWindow(QMainWindow):
         self.session_repository = SessionRepository(self.database)
 
         self.database_cleanup_service = DatabaseCleanupService(self.database)
+
+        self.session_export_service = SessionExportService(self.database)
 
         self.current_session_id: int | None = None
 
@@ -898,35 +902,46 @@ class MainWindow(QMainWindow):
             session_id: int,
     ) -> None:
         """
-        Saves current SQLite database file after session stop.
+        Exports completed session to .session.zip file.
         """
 
         save_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save session database",
-            f"session_{session_id}.db",
-            "SQLite Database (*.db)",
+            "Save completed session",
+            f"session_{session_id}.session.zip",
+            "Session Archive (*.session.zip)",
         )
 
         if not save_path:
             self.statusBar().showMessage(
-                "Session stopped without database export"
+                "Session stopped without export"
             )
             return
 
-        shutil.copy2(
-            DATABASE_PATH,
-            save_path,
-        )
+        if not save_path.endswith(".session.zip"):
+            save_path = f"{save_path}.session.zip"
+
+        try:
+            self.session_export_service.export_session(
+                session_id=session_id,
+                output_path=save_path,
+            )
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Session export failed",
+                str(error),
+            )
+            return
 
         QMessageBox.information(
             self,
-            "Database saved",
-            f"База данных сохранена:\n{save_path}",
+            "Session exported",
+            f"Сессия сохранена:\n{save_path}",
         )
 
         self.statusBar().showMessage(
-            f"Database exported: {save_path}"
+            f"Session exported: {save_path}"
         )
 
     def _clear_session_data(self) -> None:
