@@ -105,6 +105,8 @@ class MainWindow(QMainWindow):
 
         self._discover_usb_cameras()
 
+        self.camera_repository.disable_all()
+
         self._load_saved_cameras()
 
         self._load_saved_roi_regions()
@@ -438,7 +440,7 @@ class MainWindow(QMainWindow):
             self.camera_repository.create(
                 name=f"USB Camera {source}",
                 source=source,
-                enabled=True,
+                enabled=False,
             )
 
         self.statusBar().showMessage(
@@ -475,10 +477,9 @@ class MainWindow(QMainWindow):
 
     def _initialize_test_camera(self) -> None:
         """
-        Starts all enabled cameras.
+        Initializes camera subsystem without auto-starting cameras.
+        Cameras must be enabled manually by user.
         """
-
-        cameras = self.camera_repository.list_all()
 
         self.camera_manager.frame_ready.connect(
             self._on_frame_ready
@@ -492,13 +493,15 @@ class MainWindow(QMainWindow):
             self._on_fps_updated
         )
 
-        self.camera_manager.start_cameras(cameras)
+        self.status_panel.set_camera_status(0)
 
-        active_count = len([camera for camera in cameras if camera.enabled])
+        self.video_widget.set_placeholder_text(
+            "Активные камеры отсутствуют.\n"
+            "Выберите камеру и нажмите Enable selected camera."
+        )
 
-        self.status_panel.set_camera_status(active_count)
+        self._log("Camera subsystem initialized. No cameras started by default.")
 
-        self._log(f"Started enabled cameras: {active_count}")
     def _on_frame_ready(
             self,
             camera_id: int,
@@ -733,6 +736,8 @@ class MainWindow(QMainWindow):
 
         self.camera_manager.start_camera(camera)
 
+        self.active_display_camera = camera
+
         enabled_count = len(
             [camera for camera in self.camera_repository.list_all() if camera.enabled]
         )
@@ -763,6 +768,11 @@ class MainWindow(QMainWindow):
         )
 
         self.status_panel.set_camera_status(enabled_count)
+
+        if enabled_count == 0:
+            self.video_widget.set_placeholder_text(
+                "Активные камеры отсутствуют.\nВыберите камеру и нажмите Enable selected camera."
+            )
 
         self._log(f"Camera disabled: {camera_id}")
 

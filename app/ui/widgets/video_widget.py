@@ -25,6 +25,9 @@ class VideoWidget(QWidget):
         super().__init__()
 
         self.current_frame: QImage | None = None
+
+        self.placeholder_text = "Активные камеры отсутствуют"
+
         self.last_cv_frame: np.ndarray | None = None
 
         self.roi_regions: list[ROIModel] = []
@@ -79,7 +82,7 @@ class VideoWidget(QWidget):
             painter.drawText(
                 self.rect(),
                 Qt.AlignCenter,
-                "NO VIDEO SIGNAL",
+                self.placeholder_text,
             )
 
         self._draw_roi_regions(painter)
@@ -301,5 +304,17 @@ class VideoWidget(QWidget):
         """
 
         self.roi_regions.clear()
+
+        self.update()
+
+    def set_placeholder_text(self, text: str) -> None:
+        """
+        Sets placeholder text shown when no video frame is available.
+        """
+
+        self.placeholder_text = text
+
+        self.current_frame = None
+        self.last_cv_frame = None
 
         self.update()

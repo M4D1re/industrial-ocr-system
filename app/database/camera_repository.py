@@ -104,8 +104,9 @@ class CameraRepository:
         return self.create(
             name="USB Camera 0",
             source="0",
-            enabled=True,
+            enabled=False,
         )
+
 
     def set_enabled(
             self,
@@ -127,6 +128,22 @@ class CameraRepository:
                     int(enabled),
                     camera_id,
                 ),
+            )
+
+            connection.commit()
+
+    def disable_all(self) -> None:
+        """
+        Disables all cameras.
+        Used on application startup to prevent automatic camera activation.
+        """
+
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE cameras
+                SET enabled = 0
+                """
             )
 
             connection.commit()
