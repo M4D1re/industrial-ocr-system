@@ -17,7 +17,7 @@ from app.ui.dialogs.add_camera_dialog import AddCameraDialog
 
 from app.utils.paths import DATABASE_PATH
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -132,66 +132,119 @@ class MainWindow(QMainWindow):
         """
 
         toolbar = QToolBar("Main Toolbar")
+
         toolbar.setMovable(False)
 
+        toolbar.setIconSize(QSize(24, 24))
+
+        # ROI
+
         process_roi_action = toolbar.addAction("Process ROI")
+
         process_roi_action.triggered.connect(
             self._process_selected_roi
         )
 
         toolbar.addSeparator()
 
+        # Session
+
         start_session_action = toolbar.addAction("Start Session")
+
         start_session_action.triggered.connect(
             self._start_session
         )
 
         stop_session_action = toolbar.addAction("Stop Session")
+
         stop_session_action.triggered.connect(
             self._stop_session
         )
 
         toolbar.addSeparator()
 
-        toolbar.addWidget(QLabel("Hours:"))
-
-        self.polling_hours_spinbox = QSpinBox()
-        self.polling_hours_spinbox.setRange(0, 24)
-        self.polling_hours_spinbox.setValue(0)
-        toolbar.addWidget(self.polling_hours_spinbox)
-
-        toolbar.addWidget(QLabel("Minutes:"))
-
-        self.polling_minutes_spinbox = QSpinBox()
-        self.polling_minutes_spinbox.setRange(0, 59)
-        self.polling_minutes_spinbox.setValue(0)
-        toolbar.addWidget(self.polling_minutes_spinbox)
-
-        toolbar.addWidget(QLabel("Seconds:"))
-
-        self.polling_seconds_spinbox = QSpinBox()
-        self.polling_seconds_spinbox.setRange(1, 59)
-        self.polling_seconds_spinbox.setValue(5)
-        toolbar.addWidget(self.polling_seconds_spinbox)
-
-        toolbar.addSeparator()
+        # Auto OCR
 
         start_auto_ocr_action = toolbar.addAction("Start Auto OCR")
+
         start_auto_ocr_action.triggered.connect(
             self._start_auto_ocr
         )
 
         stop_auto_ocr_action = toolbar.addAction("Stop Auto OCR")
+
         stop_auto_ocr_action.triggered.connect(
             self._stop_auto_ocr
         )
 
-        clear_session_data_action = toolbar.addAction("Clear Session Data")
+        toolbar.addSeparator()
+
+        # Polling interval controls
+
+        hours_label = QLabel("Hours:")
+
+        toolbar.addWidget(hours_label)
+
+        self.polling_hours_spinbox = QSpinBox()
+
+        self.polling_hours_spinbox.setRange(0, 24)
+
+        self.polling_hours_spinbox.setValue(0)
+
+        self.polling_hours_spinbox.setFixedSize(
+            QSize(70, 32)
+        )
+
+        toolbar.addWidget(self.polling_hours_spinbox)
+
+        minutes_label = QLabel("Minutes:")
+
+        toolbar.addWidget(minutes_label)
+
+        self.polling_minutes_spinbox = QSpinBox()
+
+        self.polling_minutes_spinbox.setRange(0, 59)
+
+        self.polling_minutes_spinbox.setValue(0)
+
+        self.polling_minutes_spinbox.setFixedSize(
+            QSize(70, 32)
+        )
+
+        toolbar.addWidget(self.polling_minutes_spinbox)
+
+        seconds_label = QLabel("Seconds:")
+
+        toolbar.addWidget(seconds_label)
+
+        self.polling_seconds_spinbox = QSpinBox()
+
+        self.polling_seconds_spinbox.setRange(1, 59)
+
+        self.polling_seconds_spinbox.setValue(5)
+
+        self.polling_seconds_spinbox.setFixedSize(
+            QSize(70, 32)
+        )
+
+        toolbar.addWidget(self.polling_seconds_spinbox)
+
+        toolbar.addSeparator()
+
+        # Cleanup
+
+        clear_session_data_action = toolbar.addAction(
+            "Clear Session Data"
+        )
+
         clear_session_data_action.triggered.connect(
             self._clear_session_data
         )
 
-        factory_reset_action = toolbar.addAction("Factory Reset DB")
+        factory_reset_action = toolbar.addAction(
+            "Factory Reset DB"
+        )
+
         factory_reset_action.triggered.connect(
             self._factory_reset_database
         )
@@ -962,7 +1015,7 @@ class MainWindow(QMainWindow):
                     f"Raw: '{raw_text}' | "
                     f"Confidence: {confidence:.2f}"
                 ),
-                "INFO",
+                "SUCCESS",
             )
 
     def _on_ocr_error(self, error_text: str) -> None:
