@@ -5,6 +5,7 @@ from app.models.roi_model import ROIModel
 from app.ocr.ocr_engine import OCREngine
 from app.vision.vision_processor import VisionProcessor
 
+from app.ocr.value_parser import OCRValueParser
 
 class OCRPipeline:
     """
@@ -39,7 +40,7 @@ class OCRPipeline:
 
         raw_text, confidence = self.ocr_engine.recognize(processed)
 
-        numeric_value = self.ocr_engine.extract_number(raw_text)
+        numeric_value = OCRValueParser.parse(raw_text)
 
         return processed, raw_text, confidence, numeric_value
 

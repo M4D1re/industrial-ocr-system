@@ -3,10 +3,6 @@ from pathlib import Path
 from app.database.session_repository import SessionRepository
 from app.services.database_cleanup_service import DatabaseCleanupService
 
-from PySide6.QtWidgets import QMessageBox
-
-import shutil
-
 from app.services.session_export_service import SessionExportService
 
 from app.database.reading_repository import ReadingRepository
@@ -14,8 +10,6 @@ from app.database.reading_repository import ReadingRepository
 from app.ui.widgets.readings_panel import ReadingsPanel
 
 from app.ui.dialogs.add_camera_dialog import AddCameraDialog
-
-from app.utils.paths import DATABASE_PATH
 
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtWidgets import (
@@ -58,59 +52,33 @@ class MainWindow(QMainWindow):
 
     def __init__(self, database: DatabaseManager) -> None:
         super().__init__()
-
         self.database = database
-
         self.camera_repository = CameraRepository(self.database)
-
         self.roi_repository = ROIRepository(self.database)
-
         self.reading_repository = ReadingRepository(self.database)
-
         self.session_repository = SessionRepository(self.database)
-
         self.database_cleanup_service = DatabaseCleanupService(self.database)
-
         self.session_export_service = SessionExportService(self.database)
-
         self.current_session_id: int | None = None
-
         self.ocr_worker: MultiCameraOCRWorker | None = None
-
-
-
         self.auto_ocr_enabled = False
-
         self.auto_ocr_timer = QTimer(self)
-
         self.auto_ocr_timer.timeout.connect(
             self._process_selected_roi
         )
-
         self.default_camera = (
             self.camera_repository.get_or_create_default_camera()
         )
-
         self.active_display_camera: CameraModel = self.default_camera
-
         self.setWindowTitle("Industrial OCR System")
-
         self.resize(1600, 900)
-
         self.camera_manager = CameraManager()
-
         self.camera_discovery_service = CameraDiscoveryService()
-
         self._setup_ui()
-
         self._discover_usb_cameras()
-
         self.camera_repository.disable_all()
-
         self._load_saved_cameras()
-
         self._load_saved_roi_regions()
-
         self._initialize_test_camera()
 
     def _setup_ui(self) -> None:
@@ -119,11 +87,8 @@ class MainWindow(QMainWindow):
         """
 
         self._create_toolbar()
-
         self._create_statusbar()
-
         self._create_central_video()
-
         self._create_docks()
 
     def _create_toolbar(self) -> None:
@@ -132,123 +97,81 @@ class MainWindow(QMainWindow):
         """
 
         toolbar = QToolBar("Main Toolbar")
-
         toolbar.setMovable(False)
-
         toolbar.setIconSize(QSize(24, 24))
 
         # ROI
-
         process_roi_action = toolbar.addAction("Process ROI")
-
         process_roi_action.triggered.connect(
             self._process_selected_roi
         )
-
         toolbar.addSeparator()
 
         # Session
-
         start_session_action = toolbar.addAction("Start Session")
-
         start_session_action.triggered.connect(
             self._start_session
         )
-
         stop_session_action = toolbar.addAction("Stop Session")
-
         stop_session_action.triggered.connect(
             self._stop_session
         )
-
         toolbar.addSeparator()
 
         # Auto OCR
-
         start_auto_ocr_action = toolbar.addAction("Start Auto OCR")
-
         start_auto_ocr_action.triggered.connect(
             self._start_auto_ocr
         )
-
         stop_auto_ocr_action = toolbar.addAction("Stop Auto OCR")
-
         stop_auto_ocr_action.triggered.connect(
             self._stop_auto_ocr
         )
-
         toolbar.addSeparator()
 
         # Polling interval controls
-
         hours_label = QLabel("Hours:")
-
         toolbar.addWidget(hours_label)
-
         self.polling_hours_spinbox = QSpinBox()
-
         self.polling_hours_spinbox.setRange(0, 24)
-
         self.polling_hours_spinbox.setValue(0)
-
         self.polling_hours_spinbox.setFixedSize(
             QSize(70, 32)
         )
-
         toolbar.addWidget(self.polling_hours_spinbox)
-
         minutes_label = QLabel("Minutes:")
-
         toolbar.addWidget(minutes_label)
-
         self.polling_minutes_spinbox = QSpinBox()
-
         self.polling_minutes_spinbox.setRange(0, 59)
-
         self.polling_minutes_spinbox.setValue(0)
-
         self.polling_minutes_spinbox.setFixedSize(
             QSize(70, 32)
         )
-
         toolbar.addWidget(self.polling_minutes_spinbox)
-
         seconds_label = QLabel("Seconds:")
-
         toolbar.addWidget(seconds_label)
-
         self.polling_seconds_spinbox = QSpinBox()
-
         self.polling_seconds_spinbox.setRange(1, 59)
-
         self.polling_seconds_spinbox.setValue(5)
-
         self.polling_seconds_spinbox.setFixedSize(
             QSize(70, 32)
         )
-
         toolbar.addWidget(self.polling_seconds_spinbox)
-
         toolbar.addSeparator()
 
         # Cleanup
-
         clear_session_data_action = toolbar.addAction(
             "Clear Session Data"
         )
-
         clear_session_data_action.triggered.connect(
             self._clear_session_data
         )
-
         factory_reset_action = toolbar.addAction(
             "Factory Reset DB"
         )
-
         factory_reset_action.triggered.connect(
             self._factory_reset_database
         )
-
         self.addToolBar(toolbar)
 
     def _create_statusbar(self) -> None:
@@ -257,9 +180,7 @@ class MainWindow(QMainWindow):
         """
 
         statusbar = QStatusBar()
-
         statusbar.showMessage("System initialized")
-
         self.setStatusBar(statusbar)
 
     def _create_central_video(self) -> None:
@@ -268,15 +189,12 @@ class MainWindow(QMainWindow):
         """
 
         self.video_widget = VideoWidget()
-
         self.video_widget.roi_created.connect(
             self._on_roi_created
         )
-
         self.video_widget.roi_deleted.connect(
             self._on_roi_deleted
         )
-
         self.setCentralWidget(self.video_widget)
 
     def _create_docks(self) -> None:
@@ -285,13 +203,9 @@ class MainWindow(QMainWindow):
         """
 
         self._create_camera_dock()
-
         self._create_roi_dock()
-
         self._create_readings_dock()
-
         self._create_logs_dock()
-
         self._create_status_dock()
 
     def _create_camera_dock(self) -> None:
@@ -300,62 +214,47 @@ class MainWindow(QMainWindow):
         """
 
         dock = QDockWidget("Cameras", self)
-
         dock.setAllowedAreas(
             Qt.LeftDockWidgetArea |
             Qt.RightDockWidgetArea
         )
-
         self.camera_panel = CameraPanel()
-
         self.camera_panel.add_camera_requested.connect(
             self._open_add_camera_dialog
         )
-
         self.camera_panel.camera_selected.connect(
             self._on_camera_selected
         )
-
         self.camera_panel.enable_camera_requested.connect(
             self._enable_camera
         )
-
         self.camera_panel.disable_camera_requested.connect(
             self._disable_camera
         )
-
         dock.setWidget(self.camera_panel)
-
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+
     def _create_roi_dock(self) -> None:
         """
         Creates ROI dock.
         """
 
         dock = QDockWidget("ROI Regions", self)
-
         dock.setAllowedAreas(
             Qt.LeftDockWidgetArea |
             Qt.RightDockWidgetArea
         )
-
         self.roi_panel = ROIPanel()
-
         self.roi_panel.delete_requested.connect(
             self.video_widget.delete_roi
         )
-
         self.roi_panel.enable_requested.connect(
             self._enable_roi
         )
-
         self.roi_panel.disable_requested.connect(
             self._disable_roi
         )
-
-
         dock.setWidget(self.roi_panel)
-
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
     def _create_readings_dock(self) -> None:
@@ -364,17 +263,13 @@ class MainWindow(QMainWindow):
         """
 
         dock = QDockWidget("Current Readings", self)
-
         dock.setAllowedAreas(
             Qt.LeftDockWidgetArea |
             Qt.RightDockWidgetArea |
             Qt.BottomDockWidgetArea
         )
-
         self.readings_panel = ReadingsPanel()
-
         dock.setWidget(self.readings_panel)
-
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
 
     def _create_logs_dock(self) -> None:
@@ -383,11 +278,8 @@ class MainWindow(QMainWindow):
         """
 
         dock = QDockWidget("Logs", self)
-
         self.logs_panel = LogsPanel()
-
         dock.setWidget(self.logs_panel)
-
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
     def _create_status_dock(self) -> None:
@@ -396,11 +288,8 @@ class MainWindow(QMainWindow):
         """
 
         dock = QDockWidget("OCR Status", self)
-
         self.status_panel = StatusPanel()
-
         dock.setWidget(self.status_panel)
-
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
     def _open_add_camera_dialog(self) -> None:
         """
@@ -408,12 +297,9 @@ class MainWindow(QMainWindow):
         """
 
         dialog = AddCameraDialog()
-
         if dialog.exec() != dialog.Accepted:
             return
-
         name, source_type, source = dialog.get_camera_data()
-
         if not name:
             QMessageBox.warning(
                 self,
@@ -421,7 +307,6 @@ class MainWindow(QMainWindow):
                 "Введите имя камеры.",
             )
             return
-
         if not source:
             QMessageBox.warning(
                 self,
@@ -429,7 +314,6 @@ class MainWindow(QMainWindow):
                 "Введите источник камеры.",
             )
             return
-
         if source_type == "USB" and not source.isdigit():
             QMessageBox.warning(
                 self,
@@ -437,7 +321,6 @@ class MainWindow(QMainWindow):
                 "Для USB-камеры источник должен быть числом: 0, 1, 2...",
             )
             return
-
         if source_type == "RTSP" and not source.lower().startswith("rtsp://"):
             QMessageBox.warning(
                 self,
@@ -445,37 +328,28 @@ class MainWindow(QMainWindow):
                 "RTSP-адрес должен начинаться с rtsp://",
             )
             return
-
         camera = self.camera_repository.create(
             name=name,
             source=source,
             enabled=True,
         )
-
         self.camera_panel.add_camera(camera)
 
         self.statusBar().showMessage(
             f"Camera added: {camera.name} [{camera.source}]"
         )
-
     def _on_camera_selected(self, camera) -> None:
         """
         Selects camera for display only.
         """
 
         self.active_display_camera = camera
-
         self._load_saved_roi_regions()
-
         latest_frame = self.camera_manager.get_latest_frame(camera.id)
-
         if latest_frame is not None:
             self.video_widget.update_cv_frame(latest_frame)
-
             image = FrameConverter.convert_cv_to_qt(latest_frame)
-
             self.video_widget.update_frame(image)
-
         self.statusBar().showMessage(
             f"Displaying camera: {camera.name} [{camera.source}]"
         )
@@ -488,25 +362,20 @@ class MainWindow(QMainWindow):
         sources = self.camera_discovery_service.discover_usb_cameras(
             max_index=10
         )
-
         for source in sources:
             self.camera_repository.create(
                 name=f"USB Camera {source}",
                 source=source,
                 enabled=False,
             )
-
         self.statusBar().showMessage(
             f"Discovered USB cameras: {len(sources)}"
         )
-
     def _load_saved_cameras(self) -> None:
         """
         Loads cameras from database into camera panel.
         """
-
         cameras = self.camera_repository.list_all()
-
         self.camera_panel.set_cameras(cameras)
 
     def _load_saved_roi_regions(self) -> None:
@@ -515,15 +384,11 @@ class MainWindow(QMainWindow):
         """
 
         self.video_widget.clear_roi_regions()
-
         roi_regions = self.roi_repository.list_by_camera(
             self.active_display_camera.id
         )
-
         self.video_widget.set_roi_regions(roi_regions)
-
         self.roi_panel.set_roi_regions(roi_regions)
-
         self.statusBar().showMessage(
             f"Loaded ROI regions: {len(roi_regions)}"
         )
@@ -537,22 +402,17 @@ class MainWindow(QMainWindow):
         self.camera_manager.frame_ready.connect(
             self._on_frame_ready
         )
-
         self.camera_manager.connection_changed.connect(
             self._on_camera_connection_changed
         )
-
         self.camera_manager.fps_updated.connect(
             self._on_fps_updated
         )
-
         self.status_panel.set_camera_status(0)
-
         self.video_widget.set_placeholder_text(
             "Активные камеры отсутствуют.\n"
             "Выберите камеру и нажмите Enable selected camera."
         )
-
         self._log("Camera subsystem initialized. No cameras started by default.")
 
     def _on_frame_ready(
@@ -569,11 +429,8 @@ class MainWindow(QMainWindow):
 
         if camera_id != self.active_display_camera.id:
             return
-
         self.video_widget.update_cv_frame(frame)
-
         image = FrameConverter.convert_cv_to_qt(frame)
-
         self.video_widget.update_frame(image)
 
     def _on_camera_connection_changed(
@@ -586,13 +443,12 @@ class MainWindow(QMainWindow):
         """
 
         status = "connected" if connected else "disconnected"
-
         level = "INFO" if connected else "WARNING"
-
         self._log(
             f"Camera {camera_id}: {status}",
             level,
         )
+
     def _on_fps_updated(
             self,
             camera_id: int,
@@ -604,7 +460,6 @@ class MainWindow(QMainWindow):
 
         if camera_id != self.active_display_camera.id:
             return
-
         self.statusBar().showMessage(
             f"Camera {camera_id} | FPS: {fps:.2f}"
         )
@@ -618,12 +473,9 @@ class MainWindow(QMainWindow):
             self.default_camera.id,
             roi,
         )
-
         roi.id = database_roi_id
         roi.name = f"ROI {database_roi_id}"
-
         self.roi_panel.add_roi(roi)
-
         self._log(f"ROI saved: {roi.name}")
 
     def _on_roi_deleted(self, roi_id: int) -> None:
@@ -632,9 +484,7 @@ class MainWindow(QMainWindow):
         """
 
         self.roi_repository.delete(roi_id)
-
         self.roi_panel.remove_roi(roi_id)
-
         self._log(f"ROI deleted: {roi_id}")
 
     def _start_session(self) -> None:
@@ -649,17 +499,13 @@ class MainWindow(QMainWindow):
                 "Сессия уже запущена.",
             )
             return
-
         session_name = "Recording Session"
-
         self.current_session_id = self.session_repository.create(
             session_name
         )
-
         self.status_panel.set_session_status(
             f"active #{self.current_session_id}"
         )
-
         self._log(f"Session started: {self.current_session_id}")
 
     def _log(
@@ -673,7 +519,6 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "logs_panel"):
             self.logs_panel.add_log(message, level)
-
         self.statusBar().showMessage(message)
 
     def _stop_session(self) -> None:
@@ -688,7 +533,6 @@ class MainWindow(QMainWindow):
                 "Нет активной сессии.",
             )
             return
-
         answer = QMessageBox.question(
             self,
             "Stop Session",
@@ -697,22 +541,14 @@ class MainWindow(QMainWindow):
                 "После остановки будет предложено сохранить файл базы данных."
             ),
         )
-
         if answer != QMessageBox.Yes:
             return
-
         finished_session_id = self.current_session_id
-
         self.session_repository.finish(finished_session_id)
-
         self.current_session_id = None
-
         self.status_panel.set_session_status("stopped")
-
         self._stop_auto_ocr()
-
         self._log(f"Session stopped: {finished_session_id}")
-
         self._export_database_after_session_stop(finished_session_id)
 
     def _start_auto_ocr(self) -> None:

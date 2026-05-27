@@ -1,29 +1,23 @@
-# Byte-compiled
-__pycache__/
-*.py[cod]
-
-# Virtual Environment
+.venv/
 venv/
+env/
 
-# PyCharm
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 .idea/
 
-# Logs
-logs/*.log
-
-# Database
-data/*.db
-
-# Build
+data/
+logs/
 build/
 dist/
 
-# OS
-.DS_Store
-Thumbs.db
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+*.session.zip
 
-# Testing
-.pytest_cache/
-
-# MyPy
-.mypy_cache/
+*.log

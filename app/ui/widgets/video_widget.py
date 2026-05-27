@@ -40,6 +40,8 @@ class VideoWidget(QWidget):
 
         self.setMinimumSize(800, 600)
 
+
+
     def update_cv_frame(self, frame: np.ndarray) -> None:
         """
         Stores latest OpenCV frame for OCR processing.
