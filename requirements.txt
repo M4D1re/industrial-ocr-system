@@ -6,6 +6,8 @@ paddlepaddle==3.2.2
 numpy
 pandas
 
+pytest
+
 pyqtgraph
 
 pydantic
